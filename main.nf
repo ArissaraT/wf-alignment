@@ -136,6 +136,43 @@ process readDepthPerRef {
     """
 }
 
+process variantCalling {
+    label "clair3"
+    cpus params.threads
+    memory "11 GB"
+    input:
+        tuple val(meta), path(bam), path(bai)
+        path combined_refs
+        path combined_index
+        val clair3_model
+        val platform
+    output:
+        tuple val(meta), path("*.vcf.gz"), path("*.vcf.gz.tbi") ,emit: phased_vcf
+        tuple val(meta), path("*.bam"), path("*.bam.bai")       ,emit: phased_bam
+    script:
+    """
+    run_clair3.sh \
+        --sample_name=${meta.alias} \
+        --bam_fn=${bam} \
+        --ref_fn=${combined_refs} \
+        --threads=$task.cpus \
+        --min_contig_size=1000 \
+        --use_whatshap_for_intermediate_phasing \
+        --use_whatshap_for_final_output_phasing \
+        --use_whatshap_for_final_output_haplotagging \
+        --include_all_ctg \
+        --model_path=/opt/models/${params.clair3_model} \
+        --platform=${params.platform} \
+        --output=clair3
+    
+    # rename output files
+    mv clair3/merge_output.vcf.gz ${meta.alias}_merge_output.vcf.gz
+    mv clair3/merge_output.vcf.gz.tbi ${meta.alias}_merge_output.vcf.gz.tbi
+    mv clair3/phased_output.bam ${meta.alias}_phased_output.bam
+    mv clair3/phased_output.bam.bai ${meta.alias}_phased_output.bam.bai    
+    """
+}
+
 process makeReport {
     label "wf_common"
     cpus 1
@@ -218,6 +255,8 @@ workflow pipeline {
         refs
         counts
         depth_coverage
+        clair3_model
+        platform
     main:
         // get params & versions
         workflow_params = getParams()
@@ -281,6 +320,19 @@ workflow pipeline {
             flagstat: [meta, flagstat]
             readstats: [meta, readstats.exists() ? readstats : null]
         }
+        
+        // run clair3
+        if (clair3_model) {
+            model = channel.value(clair3_model)
+            mode = channel.value(platform)
+            clair3_results = variantCalling (bam, refs.combined.collect(), refs.combined_index.collect(), model, platform )
+        }
+        vcfPhased = clair3_results.phased_vcf
+        bamPhased = clair3_results.phased_bam
+        vcf_output =  vcfPhased.map { meta, vcf, tbi -> vcf }
+        vcf_output_index =  vcfPhased.map { meta, vcf, tbi -> tbi }
+        bam_output = bamPhased.map{ meta, bam, bai -> bam }
+        bam_output_index = bamPhased.map{ meta, bam, bai -> bai }
 
         // create a channel with the stats files needed for the report
         files_for_report = stats.hists
@@ -383,6 +435,10 @@ workflow pipeline {
         combined_ref = refs.combined
         combined_ref_index = refs.combined_index
         combined_ref_mmi_file = minimap_reference
+        vcf_output
+        vcf_output_index
+        bam_output
+        bam_output_index
 }
 
 
@@ -432,10 +488,12 @@ workflow {
     }
 
     counts = file(params.counts ?: OPTIONAL_FILE, checkIfExists: true)
+    clair3_model = params.clair3_model
+    platform = params.platform
 
     // Run pipeline
     results = pipeline(
-        sample_data, params.references, counts, params.depth_coverage
+        sample_data, params.references, counts, params.depth_coverage, clair3_model, platform
     )
 
     // publish results files
@@ -447,6 +505,10 @@ workflow {
         results.combined_ref_mmi_file,
         results.report,
         results.igv_conf,
+        results.vcf_output,
+        results.vcf_output_index,
+        results.bam_output,
+        results.bam_output_index,
     )
     | map { [it, null] }
     | mix (
