@@ -20,7 +20,7 @@ process makeMMIndex {
     cpus params.threads
     memory {
         def ref_size = combined_refs.size()
-        combined_refs.size() > 1e9 ? "31 GB" : "11 GB"
+        combined_refs.size() > 1e9 ? "31 GB" : "8 GB"
     }
     input:
         path combined_refs, stageAs: "combined_references.fasta"
@@ -39,7 +39,7 @@ process checkReferences {
     cpus params.threads
     memory {
         def ref_size = combined_refs.size()
-        combined_refs.size() > 1e9 ? "31 GB" : "11 GB"
+        combined_refs.size() > 1e9 ? "31 GB" : "8 GB"
     }
     input:
         path "combined_references.mmi"
@@ -58,7 +58,7 @@ process alignReads {
     label "wfalignment"
     cpus params.threads
     memory {
-        combined_refs.size() > 1e9 ? "31 GB" : "11 GB"
+        combined_refs.size() > 1e9 ? "31 GB" : "8 GB"
     }
     input:
         tuple val(meta), path(input)
@@ -139,7 +139,7 @@ process readDepthPerRef {
 process variantCalling {
     label "clair3"
     cpus params.threads
-    memory "11 GB"
+    memory "8 GB"
     input:
         tuple val(meta), path(bam), path(bai)
         path combined_refs
@@ -176,7 +176,7 @@ process variantCalling {
 process makeReport {
     label "wf_common"
     cpus 1
-    memory {11.GB * task.attempt}
+    memory {8.GB * task.attempt}
     maxRetries 1
     errorStrategy = 'retry'
     input:
