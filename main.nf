@@ -20,7 +20,7 @@ process makeMMIndex {
     cpus params.threads
     memory {
         def ref_size = combined_refs.size()
-        combined_refs.size() > 1e9 ? "12 GB" : "8 GB"
+        combined_refs.size() > 1e9 ? "6 GB" : "4 GB"
     }
     input:
         path combined_refs, stageAs: "combined_references.fasta"
@@ -39,7 +39,7 @@ process checkReferences {
     cpus params.threads
     memory {
         def ref_size = combined_refs.size()
-        combined_refs.size() > 1e9 ? "12 GB" : "8 GB"
+        combined_refs.size() > 1e9 ? "6 GB" : "4 GB"
     }
     input:
         path "combined_references.mmi"
@@ -58,7 +58,7 @@ process alignReads {
     label "wfalignment"
     cpus params.threads
     memory {
-        combined_refs.size() > 1e9 ? "12 GB" : "8 GB"
+        combined_refs.size() > 1e9 ? "6 GB" : "4 GB"
     }
     input:
         tuple val(meta), path(input)
@@ -108,7 +108,7 @@ process readDepthPerRef {
     // TODO: check if parallelisation with `xargs` or `parallel` is more efficient
     label "wfalignment"
     cpus 3
-    memory "7 GB"
+    memory "6 GB"
     input:
         tuple val(meta), path(alignment), path(index)
         path ref_len
@@ -139,7 +139,7 @@ process readDepthPerRef {
 process variantCalling {
     label "clair3"
     cpus params.threads
-    memory "8 GB"
+    memory "6 GB"
     input:
         tuple val(meta), path(bam), path(bai)
         path combined_refs
@@ -176,7 +176,7 @@ process variantCalling {
 process makeReport {
     label "wf_common"
     cpus 1
-    memory {8.GB * task.attempt}
+    memory {4.GB * task.attempt}
     maxRetries 1
     errorStrategy = 'retry'
     input:
